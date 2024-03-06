@@ -279,11 +279,33 @@ class Problem:
             print("No optimal solution found.")
         vals = self.model.getAttr("X", self.perf)
         print(vals)
+
     def calc_u_res(self):
         self.model.Params.OutputFlag = 0
         self.model.optimize()
         u_results = round(sum(self.u[t, k].x for t in self.T for k in self.K), 2)
         return u_results
+
+    def calc_x_res(self):
+        self.model.Params.OutputFlag = 0
+        self.model.optimize()
+
+        x_values = []
+        for i in self.I:
+            x_i_values = []
+            for t in self.T:
+                for k in self.K:
+                    x_var = self.x[i, t, k]
+                    x_value = self.model.getVarByName(x_var.varName).X
+                    x_i_values.append(round(x_value, 3))
+            x_values.append(x_i_values)
+
+        sum_xWerte = []
+        for i in range(len(x_values[0])):
+            sum_value = sum(row[i] for row in x_values)
+            sum_xWerte.append(sum_value)
+
+        return sum_xWerte
 
     def calc_rest(self):
         self.model.Params.OutputFlag = 0
@@ -306,41 +328,15 @@ class Problem:
                     x_value = self.model.getVarByName(x_var.varName).X
                     x_i_values.append(round(x_value, 3))
             x_values.append(x_i_values)
+        und_values = self.model.getAttr("X", self.u)
         print(f"x-Values: {x_values}")
         print(f"perf-Values: {perf_values}")
+        print(f"u-Values: {und_values}")
 
 
-    def calc_perf(self, u_results):
-        self.x_values = []
-        for i in self.I:
-            self.x_i_values = []
-            for t in self.T:
-                for k in self.K:
-                    self.x_var = self.x[i, t, k]
-                    self.x_value = self.model.getVarByName(self.x_var.varName).X
-                    self.x_i_values.append(round(self.x_value, 3))
-            self.x_values.append(self.x_i_values)
-
-        self.perf_values = []
-        for i in self.I:
-            self.perf_i_values = []
-            for t in self.T:
-                for k in self.K:
-                    self.perf_var = self.perf[i, t, k]
-                    self.perf_value = self.model.getVarByName(self.perf_var.varName).X
-                    self.perf_i_values.append(round(self.perf_value, 3))
-            self.perf_values.append(self.perf_i_values)
-
+    def calc_behavior(self, u_results, sum_xWerte):
+        self.sum_xWerte = sum_xWerte
         self.sum_values = sum(self.demand_values)
-        self.sum_xWerte = []
-        for i in range(len(self.x_values[0])):
-            self.sum_value = sum(row[i] for row in self.x_values)
-            self.sum_xWerte.append(self.sum_value)
-
-        self.sum_pWerte = []
-        for i in range(len(self.perf_values[0])):
-            self.sum_value = sum(row[i] for row in self.perf_values)
-            self.sum_pWerte.append(self.sum_value)
 
         self.comparison_result = []
         for i in range(len(self.demand_values)):
@@ -360,27 +356,14 @@ class Problem:
 
         return self.understaffing, self.perf_loss
 
-    def calc_understaffing(self, u_results):
+    def calc_naive(self, u_results, sum_xWerte):
         self.sum_all_doctors = 0
-        self.x_values = []
-        for i in self.I:
-            self.x_i_values = []
-            for t in self.T:
-                for k in self.K:
-                    self.x_var = self.x[i, t, k]
-                    self.x_value = self.model.getVarByName(self.x_var.varName).X
-                    self.x_i_values.append(round(self.x_value, 1))
-            self.x_values.append(self.x_i_values)
-        print(f"x-values: {self.x_values}")
-        self.sum_xWerte2 = []
-        for i in range(len(self.x_values[0])):
-            self.sum_value = sum(row[i] for row in self.x_values)
-            self.sum_xWerte2.append(self.sum_value)
-        print(f"x-values: {self.sum_xWerte2}")
+        self.sum_xWerte = sum_xWerte
+        self.sum_values = sum(self.demand_values)
 
         self.comparison1_result = []
         for i in range(len(self.demand_values)):
-            if self.demand_values[i] < self.sum_xWerte2[i]:
+            if self.demand_values[i] < self.sum_xWerte[i]:
                 self.comparison1_result.append(0)
             else:
                 self.comparison1_result.append(1)
@@ -422,17 +405,13 @@ class Problem:
         print(f"Understaffing: {u_results}")
         print(f"Performance Loss: {self.sum_all_doctors}")
 
-
-# Lists
-objValHistSP = []
-objValHistRMP = []
-avg_rc_hist = []
-
 # Build & Solve MP
-problem = Problem(DataDF, Demand_Dict, 0.1)
+problem = Problem(DataDF, Demand_Dict, 1e-16)
 problem.buildLinModel()
 problem.updateModel()
 problem.checkForQuadraticCons()
 problem.solveModel()
 
-problem.calc_understaffing(problem.calc_u_res())
+problem.calc_behavior(problem.calc_u_res(), problem.calc_x_res())
+problem.calc_naive(problem.calc_u_res(), problem.calc_x_res())
+problem.calc_rest()
