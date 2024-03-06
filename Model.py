@@ -277,8 +277,6 @@ class Problem:
                             print(f"Physician {i}: Shift {k} on day {t}")
         else:
             print("No optimal solution found.")
-        vals = self.model.getAttr("X", self.perf)
-        print(vals)
 
     def calc_u_res(self):
         self.model.Params.OutputFlag = 0
@@ -360,17 +358,19 @@ class Problem:
         self.sum_all_doctors = 0
         self.sum_xWerte = sum_xWerte
         self.sum_values = sum(self.demand_values)
+        self.cumulative_sum = [0]
+        self.doctors_cumulative_multiplied = []
+        self.vals = self.demand_values
 
-        self.comparison1_result = []
-        for i in range(len(self.demand_values)):
-            if self.demand_values[i] < self.sum_xWerte[i]:
-                self.comparison1_result.append(0)
+        self.comp_result = []
+        for i in range(len(self.vals)):
+            if self.vals[i] < self.sum_xWerte[i]:
+                self.comp_result.append(0)
             else:
-                self.comparison1_result.append(1)
-        print(f"x-values: {self.comparison1_result}")
+                self.comp_result.append(1)
 
         self.doctors_cumulative_multiplied = []
-        for i in self.I:
+        for i in I:
             self.doctor_values = [int(self.sc[i, t].X) for t in self.T]
             self.y_values = []
             for t in self.T:
@@ -385,16 +385,17 @@ class Problem:
                 else:
                     self.r_values.append(0)
             self.cumulative_sum = [0]
-            self.result = []
+
             for i in range(1, len(self.doctor_values)):
                 if self.r_values[i] == 1:
                     self.cumulative_sum.append(0)
                 else:
                     self.cumulative_sum.append(self.cumulative_sum[-1] + self.doctor_values[i])
+
             self.cumulative_values = [x * self.mue for x in self.cumulative_sum]
             self.multiplied_values = [self.cumulative_values[j] * self.y_values[j] for j in
                                       range(len(self.cumulative_values))]
-            self.multiplied_values1 = [self.multiplied_values[j] * self.comparison1_result[j] for j in
+            self.multiplied_values1 = [self.multiplied_values[j] * self.comp_result[j] for j in
                                        range(len(self.multiplied_values))]
             self.total_sum = sum(self.multiplied_values1)
             self.doctors_cumulative_multiplied.append(self.total_sum)
@@ -414,4 +415,3 @@ problem.solveModel()
 
 problem.calc_behavior(problem.calc_u_res(), problem.calc_x_res())
 problem.calc_naive(problem.calc_u_res(), problem.calc_x_res())
-problem.calc_rest()
