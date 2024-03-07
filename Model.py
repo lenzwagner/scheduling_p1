@@ -372,28 +372,34 @@ class Problem:
         self.doctors_cumulative_multiplied = []
         for i in I:
             self.doctor_values = [int(self.sc[i, t].X) for t in self.T]
-            self.y_values = []
-            for t in self.T:
-                if self.y[i, t].x > 0.5:
-                    self.y_values.append(1)
-                else:
-                    self.y_values.append(0)
             self.r_values = []
             for t in self.T:
                 if self.r[i, t].x > 0.5:
                     self.r_values.append(1)
                 else:
                     self.r_values.append(0)
-            self.cumulative_sum = [0]
+            self.x_i_values = []
+            for t in self.T:
+                for k in self.K:
+                    if self.x[i, t, k].x > 0.5:
+                        self.x_i_values.append(1)
+                    else:
+                        self.x_i_values.append(0)
 
+            self.cumulative_sum = [0]
             for i in range(1, len(self.doctor_values)):
                 if self.r_values[i] == 1:
                     self.cumulative_sum.append(0)
                 else:
                     self.cumulative_sum.append(self.cumulative_sum[-1] + self.doctor_values[i])
 
-            self.cumulative_values = [x * self.mue for x in self.cumulative_sum]
-            self.multiplied_values = [self.cumulative_values[j] * self.y_values[j] for j in
+            self.cumulative_sum1 = []
+            for element in self.cumulative_sum:
+                for _ in range(len(self.K)):
+                    self.cumulative_sum1.append(element)
+
+            self.cumulative_values = [x * self.mue for x in self.cumulative_sum1]
+            self.multiplied_values = [self.cumulative_values[j] * self.x_i_values[j] for j in
                                       range(len(self.cumulative_values))]
             self.multiplied_values1 = [self.multiplied_values[j] * self.comp_result[j] for j in
                                        range(len(self.multiplied_values))]
@@ -407,7 +413,7 @@ class Problem:
         print(f"Performance Loss: {self.sum_all_doctors}")
 
 # Build & Solve MP
-problem = Problem(DataDF, Demand_Dict, 1e-16)
+problem = Problem(DataDF, Demand_Dict, 0)
 problem.buildLinModel()
 problem.updateModel()
 problem.checkForQuadraticCons()
