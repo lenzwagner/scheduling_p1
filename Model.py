@@ -1,7 +1,9 @@
 import openpyxl
 import gurobipy as gu
 from gurobipy import *
+import seaborn as sns
 import pandas as pd
+import matplotlib.pyplot as plt
 import os
 import math
 
@@ -67,6 +69,7 @@ class Problem:
         self.Max_WD = 5
         self.LL = range(1, self.Max_WD + 1)
         self.F_S = [(3, 1), (3, 2), (2, 1)]
+        self.objective_values = []
         self.Days = len(self.T)
         self.demand_values = [self.demand[key] for key in self.demand.keys()]
 
@@ -252,11 +255,6 @@ class Problem:
     def writeModel(self):
         self.model.write("model.lp")
 
-    def getObjVal(self):
-        obj = self.model.getObjective()
-        value = obj.getValue()
-        return value
-
     def optValues(self):
         values = self.model.getAttr("X", self.x)
         print(values)
@@ -304,6 +302,33 @@ class Problem:
             sum_xWerte.append(sum_value)
 
         return sum_xWerte
+
+    def myCallback(self, model, where):
+        if where == gu.GRB.Callback.MIPSOL:
+            objective_value = model.cbGet(GRB.Callback.MIPSOL_OBJ)
+            self.objective_values.append(objective_value)
+
+    def plotSolution(self, objective_values):
+        sns.set(style="darkgrid")
+
+        # Create the plot
+        plt.figure(figsize=(10, 6))
+
+        # Plot the objective values over time with markers
+        plt.plot(objective_values, marker='o', linestyle='-')
+
+        # Add labels and title
+        plt.xlabel('Time')
+        plt.ylabel('Objective Value')
+        plt.title('Objective Function Plot')
+
+        # Show the plot
+        plt.show()
+
+    def solveModelWithCallback(self):
+        self.model.optimize(self.myCallback)
+        self.plotSolution(self.objective_values)
+
 
     def calc_rest(self):
         self.model.Params.OutputFlag = 0
@@ -417,7 +442,7 @@ problem = Problem(DataDF, Demand_Dict, 0)
 problem.buildLinModel()
 problem.updateModel()
 problem.checkForQuadraticCons()
-problem.solveModel()
+problem.solveModelWithCallback()
 
 problem.calc_behavior(problem.calc_u_res(), problem.calc_x_res())
 problem.calc_naive(problem.calc_u_res(), problem.calc_x_res())
