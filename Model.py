@@ -4,7 +4,9 @@ from gurobipy import *
 import seaborn as sns
 import pandas as pd
 import matplotlib.pyplot as plt
+import time
 import os
+import csv
 import math
 
 # Path
@@ -260,8 +262,12 @@ class Problem:
         print(values)
 
     def checkForQuadraticCons(self):
-        self.qconstrs = self.model.getQConstrs()
-        print(f"Check for quadratic constraintrs {self.qconstrs}")
+        qconstrs = self.model.getQConstrs()
+        print("Check for quadratic constraints:")
+        if len(qconstrs) > 0:
+            print(True)
+        else:
+            print(None)
 
     def solveModel(self):
         self.model.optimize()
@@ -307,27 +313,42 @@ class Problem:
         if where == gu.GRB.Callback.MIPSOL:
             objective_value = model.cbGet(GRB.Callback.MIPSOL_OBJ)
             self.objective_values.append(objective_value)
+            cur_obj = model.cbGet(GRB.Callback.MIPSOL_OBJBST)
+            cur_bd = model.cbGet(GRB.Callback.MIPSOL_OBJBND)
+
+            # Did objective value or best bound change?
+            if self.model._obj != cur_obj or model._bd != cur_bd:
+                self.model._obj = cur_obj
+                self.model._bd = cur_bd
+                self.model._data.append([time.time() - self.model._start, cur_obj, cur_bd])
+
+
 
     def plotSolution(self, objective_values):
         sns.set(style="darkgrid")
 
-        # Create the plot
         plt.figure(figsize=(10, 6))
 
-        # Plot the objective values over time with markers
         plt.plot(objective_values, marker='o', linestyle='-')
 
-        # Add labels and title
-        plt.xlabel('Time')
+        plt.xlabel('Time in seconds')
         plt.ylabel('Objective Value')
         plt.title('Objective Function Plot')
 
-        # Show the plot
         plt.show()
 
     def solveModelWithCallback(self):
+        self.model._obj = None
+        self.model._bd = None
+        self.model._data = []
+        self.model._start = time.time()
         self.model.optimize(self.myCallback)
         self.plotSolution(self.objective_values)
+
+
+        with open('data.csv', 'w') as f:
+            writer = csv.writer(f)
+            writer.writerows(self.model._data)
 
 
     def calc_rest(self):
