@@ -23,9 +23,16 @@ T = df['Day'].tolist()
 K = df1['Shift'].tolist()
 S_T = df1['Hours'].tolist()
 I_T = work['WT'].tolist()
+
+Min_WD_i = [2, 3, 2, 3]
+Max_WD_i = [5, 5, 5, 6]
 S_T = {a: c for a, c in zip(K, S_T)}
 I_T = {a: d for a, d in zip(I, I_T)}
 W_I = {a: e for a, e in zip(I, W_I)}
+
+Min_WD_i = {a: f for a, f in zip(I, Min_WD_i)}
+Max_WD_i = {a: g for a, g in zip(I, Max_WD_i)}
+
 I_list1 = pd.DataFrame(I, columns=['I'])
 T_list1 = pd.DataFrame(T, columns=['T'])
 K_list1 = pd.DataFrame(K, columns=['K'])
@@ -44,10 +51,10 @@ for row in worksheet.iter_rows(min_row=2, values_only=True):
             Demand_Dict[(int(row[0]), i)] = cell_value
 workbook.close()
 print(Demand_Dict)
-
+print(I)
 
 class Problem:
-    def __init__(self, dfData, DemandDF, eps):
+    def __init__(self, dfData, DemandDF, eps, Min_WD, Max_WD):
         self.I = dfData['I'].dropna().astype(int).unique().tolist()
         self.T = dfData['T'].dropna().astype(int).unique().tolist()
         self.K = dfData['K'].dropna().astype(int).unique().tolist()
@@ -64,12 +71,11 @@ class Problem:
         self.omega = math.floor(1 / 1e-6)
         self.M = len(self.T) + self.omega
         self.xi = 1 - self.epsilon * self.omega
-        self.Min_Week = 2
-        self.Max_Week = 6
         self.Days_Off = 2
         self.Min_WD = 2
+        self.Min_WD_i = Min_WD
         self.Max_WD = 5
-        self.LL = range(1, self.Max_WD + 1)
+        self.Max_WD_i = Max_WD
         self.F_S = [(3, 1), (3, 2), (2, 1)]
         self.objective_values = []
         self.Days = len(self.T)
@@ -150,12 +156,12 @@ class Problem:
 
     def genRegCons(self):
         for i in self.I:
-            for t in range(1, len(self.T) - self.Max_WD + 1):
+            for t in range(1, len(self.T) - self.Max_WD_i[i] + 1):
                 self.model.addLConstr(
-                    gu.quicksum(self.y[i, u] for u in range(t, t + 1 + self.Max_WD)) <= self.Max_WD)
-            for t in range(2, len(self.T) - self.Min_WD + 1):
+                    gu.quicksum(self.y[i, u] for u in range(t, t + 1 + self.Max_WD_i[i])) <= self.Max_WD_i[i])
+            for t in range(2, len(self.T) - self.Min_WD_i[i] + 1):
                 self.model.addLConstr(
-                    gu.quicksum(self.y[i, u] for u in range(t + 1, t + self.Min_WD + 1)) >= self.Min_WD * (
+                    gu.quicksum(self.y[i, u] for u in range(t + 1, t + self.Min_WD_i[i] + 1)) >= self.Min_WD_i[i] * (
                                 self.y[i, t + 1] - self.y[i, t]))
         for i in self.I:
             for t in range(2, len(self.T) - self.Days_Off + 2):
@@ -478,7 +484,7 @@ class Problem:
             print('Error code ' + str(e.errno) + ': ' + str(e))
 
 # Build & Solve MP
-problem = Problem(DataDF, Demand_Dict, 0)
+problem = Problem(DataDF, Demand_Dict, 0, Min_WD_i, Max_WD_i)
 problem.buildLinModel()
 problem.updateModel()
 problem.checkForQuadraticCons()
