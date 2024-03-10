@@ -330,6 +330,7 @@ class Problem:
             self.model._data = []
             self.model._start = time.time()
             self.model.optimize(self.myCallback)
+            print("Final MIP gap value: %f" % self.model.MIPGap)
             self.plotSolution(self.objective_values)
             self.model.write("final.lp")
             if self.model.status == GRB.OPTIMAL:
