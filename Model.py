@@ -269,19 +269,6 @@ class Problem:
         else:
             print(None)
 
-    def solveModel(self):
-        self.model.optimize()
-        self.model.write("final.lp")
-        if self.model.status == GRB.OPTIMAL:
-            print("Optimal solution found")
-            for i in self.I:
-                for t in self.T:
-                    for k in self.K:
-                        if self.x[i, t, k].x > 0.0:
-                            print(f"Physician {i}: Shift {k} on day {t}")
-        else:
-            print("No optimal solution found.")
-
     def calc_u_res(self):
         self.model.Params.OutputFlag = 0
         self.model.optimize()
@@ -316,7 +303,6 @@ class Problem:
             cur_obj = model.cbGet(GRB.Callback.MIPSOL_OBJBST)
             cur_bd = model.cbGet(GRB.Callback.MIPSOL_OBJBND)
 
-            # Did objective value or best bound change?
             if self.model._obj != cur_obj or model._bd != cur_bd:
                 self.model._obj = cur_obj
                 self.model._bd = cur_bd
@@ -338,125 +324,157 @@ class Problem:
         plt.show()
 
     def solveModelWithCallback(self):
-        self.model._obj = None
-        self.model._bd = None
-        self.model._data = []
-        self.model._start = time.time()
-        self.model.optimize(self.myCallback)
-        self.plotSolution(self.objective_values)
+        try:
+            self.model._obj = None
+            self.model._bd = None
+            self.model._data = []
+            self.model._start = time.time()
+            self.model.optimize(self.myCallback)
+            self.plotSolution(self.objective_values)
+            self.model.write("final.lp")
+            if self.model.status == GRB.OPTIMAL:
+                print("Optimal solution found")
+                for i in self.I:
+                    for t in self.T:
+                        for k in self.K:
+                            if self.x[i, t, k].x > 0.0:
+                                print(f"Physician {i}: Shift {k} on day {t}")
+            else:
+                print("No optimal solution found.")
 
+            print(self.model._data)
 
-        with open('data.csv', 'w') as f:
-            writer = csv.writer(f)
-            writer.writerows(self.model._data)
+            data = self.model._data
+            filename = "data.csv"
+
+            with open(filename, 'w', newline='') as file:
+                writer = csv.writer(file)
+                writer.writerows(data)
+
+        except gu.GurobiError as e:
+            print('Error code ' + str(e.errno) + ': ' + str(e))
+
 
 
     def calc_rest(self):
-        self.model.Params.OutputFlag = 0
-        self.model.optimize()
-        perf_values = []
-        for i in self.I:
-            perf_i_values = []
-            for t in self.T:
-                for k in self.K:
-                    perf_var = self.perf[i, t, k]
-                    perf_value = self.model.getVarByName(perf_var.varName).X
-                    perf_i_values.append(round(perf_value, 3))
-            perf_values.append(perf_i_values)
-        x_values = []
-        for i in self.I:
-            x_i_values = []
-            for t in self.T:
-                for k in self.K:
-                    x_var = self.x[i, t, k]
-                    x_value = self.model.getVarByName(x_var.varName).X
-                    x_i_values.append(round(x_value, 3))
-            x_values.append(x_i_values)
-        und_values = self.model.getAttr("X", self.u)
-        print(f"x-Values: {x_values}")
-        print(f"perf-Values: {perf_values}")
-        print(f"u-Values: {und_values}")
+        try:
+            self.model.Params.OutputFlag = 0
+            self.model.optimize()
+            perf_values = []
+            for i in self.I:
+                perf_i_values = []
+                for t in self.T:
+                    for k in self.K:
+                        perf_var = self.perf[i, t, k]
+                        perf_value = self.model.getVarByName(perf_var.varName).X
+                        perf_i_values.append(round(perf_value, 3))
+                perf_values.append(perf_i_values)
+            x_values = []
+            for i in self.I:
+                x_i_values = []
+                for t in self.T:
+                    for k in self.K:
+                        x_var = self.x[i, t, k]
+                        x_value = self.model.getVarByName(x_var.varName).X
+                        x_i_values.append(round(x_value, 3))
+                x_values.append(x_i_values)
+            und_values = self.model.getAttr("X", self.u)
+            print(f"x-Values: {x_values}")
+            print(f"perf-Values: {perf_values}")
+            print(f"u-Values: {und_values}")
+        except gu.GurobiError as e:
+            print('Error code ' + str(e.errno) + ': ' + str(e))
+
+
 
 
     def calc_behavior(self, u_results, sum_xWerte):
-        self.sum_xWerte = sum_xWerte
-        self.sum_values = sum(self.demand_values)
+        try:
+            self.sum_xWerte = sum_xWerte
+            self.sum_values = sum(self.demand_values)
 
-        self.comparison_result = []
-        for i in range(len(self.demand_values)):
-            if self.demand_values[i] > self.sum_xWerte[i]:
-                self.comparison_result.append(self.demand_values[i] - self.sum_xWerte[i])
-            else:
-                self.comparison_result.append(0)
+            self.comparison_result = []
+            for i in range(len(self.demand_values)):
+                if self.demand_values[i] > self.sum_xWerte[i]:
+                    self.comparison_result.append(self.demand_values[i] - self.sum_xWerte[i])
+                else:
+                    self.comparison_result.append(0)
 
-        self.understaffing = round(sum(self.comparison_result), 3)
-        self.perf_loss = round(u_results - self.understaffing, 3)
+            self.understaffing = round(sum(self.comparison_result), 3)
+            self.perf_loss = round(u_results - self.understaffing, 3)
 
-        print("")
-        print(f"Undercoverage: {u_results}")
-        print(f"Understaffing: {self.understaffing}")
-        print(f"Performance Loss: {self.perf_loss}")
-        print("")
+            print("")
+            print(f"Undercoverage: {u_results}")
+            print(f"Understaffing: {self.understaffing}")
+            print(f"Performance Loss: {self.perf_loss}")
+            print("")
 
-        return self.understaffing, self.perf_loss
+            return self.understaffing, self.perf_loss
+
+        except gu.GurobiError as e:
+            print('Error code ' + str(e.errno) + ': ' + str(e))
 
     def calc_naive(self, u_results, sum_xWerte):
-        self.sum_all_doctors = 0
-        self.sum_xWerte = sum_xWerte
-        self.sum_values = sum(self.demand_values)
-        self.cumulative_sum = [0]
-        self.doctors_cumulative_multiplied = []
-        self.vals = self.demand_values
-
-        self.comp_result = []
-        for i in range(len(self.vals)):
-            if self.vals[i] < self.sum_xWerte[i]:
-                self.comp_result.append(0)
-            else:
-                self.comp_result.append(1)
-
-        self.doctors_cumulative_multiplied = []
-        for i in I:
-            self.doctor_values = [int(self.sc[i, t].X) for t in self.T]
-            self.r_values = []
-            for t in self.T:
-                if self.r[i, t].x > 0.5:
-                    self.r_values.append(1)
-                else:
-                    self.r_values.append(0)
-            self.x_i_values = []
-            for t in self.T:
-                for k in self.K:
-                    if self.x[i, t, k].x > 0.5:
-                        self.x_i_values.append(1)
-                    else:
-                        self.x_i_values.append(0)
-
+        try:
+            self.sum_all_doctors = 0
+            self.sum_xWerte = sum_xWerte
+            self.sum_values = sum(self.demand_values)
             self.cumulative_sum = [0]
-            for i in range(1, len(self.doctor_values)):
-                if self.r_values[i] == 1:
-                    self.cumulative_sum.append(0)
+            self.doctors_cumulative_multiplied = []
+            self.vals = self.demand_values
+
+            self.comp_result = []
+            for i in range(len(self.vals)):
+                if self.vals[i] < self.sum_xWerte[i]:
+                    self.comp_result.append(0)
                 else:
-                    self.cumulative_sum.append(self.cumulative_sum[-1] + self.doctor_values[i])
+                    self.comp_result.append(1)
 
-            self.cumulative_sum1 = []
-            for element in self.cumulative_sum:
-                for _ in range(len(self.K)):
-                    self.cumulative_sum1.append(element)
+            self.doctors_cumulative_multiplied = []
+            for i in I:
+                self.doctor_values = [int(self.sc[i, t].X) for t in self.T]
+                self.r_values = []
+                for t in self.T:
+                    if self.r[i, t].x > 0.5:
+                        self.r_values.append(1)
+                    else:
+                        self.r_values.append(0)
+                self.x_i_values = []
+                for t in self.T:
+                    for k in self.K:
+                        if self.x[i, t, k].x > 0.5:
+                            self.x_i_values.append(1)
+                        else:
+                            self.x_i_values.append(0)
 
-            self.cumulative_values = [x * self.mue for x in self.cumulative_sum1]
-            self.multiplied_values = [self.cumulative_values[j] * self.x_i_values[j] for j in
-                                      range(len(self.cumulative_values))]
-            self.multiplied_values1 = [self.multiplied_values[j] * self.comp_result[j] for j in
-                                       range(len(self.multiplied_values))]
-            self.total_sum = sum(self.multiplied_values1)
-            self.doctors_cumulative_multiplied.append(self.total_sum)
-            self.sum_all_doctors += self.total_sum
+                self.cumulative_sum = [0]
+                for i in range(1, len(self.doctor_values)):
+                    if self.r_values[i] == 1:
+                        self.cumulative_sum.append(0)
+                    else:
+                        self.cumulative_sum.append(self.cumulative_sum[-1] + self.doctor_values[i])
 
-        self.understaffing1 = u_results + self.sum_all_doctors
-        print(f"Undercoverage: {self.understaffing1}")
-        print(f"Understaffing: {u_results}")
-        print(f"Performance Loss: {self.sum_all_doctors}")
+                self.cumulative_sum1 = []
+                for element in self.cumulative_sum:
+                    for _ in range(len(self.K)):
+                        self.cumulative_sum1.append(element)
+
+                self.cumulative_values = [x * self.mue for x in self.cumulative_sum1]
+                self.multiplied_values = [self.cumulative_values[j] * self.x_i_values[j] for j in
+                                          range(len(self.cumulative_values))]
+                self.multiplied_values1 = [self.multiplied_values[j] * self.comp_result[j] for j in
+                                           range(len(self.multiplied_values))]
+                self.total_sum = sum(self.multiplied_values1)
+                self.doctors_cumulative_multiplied.append(self.total_sum)
+                self.sum_all_doctors += self.total_sum
+
+            self.understaffing1 = u_results + self.sum_all_doctors
+            print(f"Undercoverage: {self.understaffing1}")
+            print(f"Understaffing: {u_results}")
+            print(f"Performance Loss: {self.sum_all_doctors}")
+
+        except gu.GurobiError as e:
+            print('Error code ' + str(e.errno) + ': ' + str(e))
 
 # Build & Solve MP
 problem = Problem(DataDF, Demand_Dict, 0)
