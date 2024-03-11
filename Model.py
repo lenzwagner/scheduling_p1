@@ -4,6 +4,8 @@ from gurobipy import *
 import seaborn as sns
 import pandas as pd
 import matplotlib.pyplot as plt
+import plotly.graph_objects as go
+import gurobi_logtools as glt
 import time
 import os
 import csv
@@ -50,8 +52,13 @@ for row in worksheet.iter_rows(min_row=2, values_only=True):
         if isinstance(cell_value, int):
             Demand_Dict[(int(row[0]), i)] = cell_value
 workbook.close()
-print(Demand_Dict)
-print(I)
+
+# Change Dir / remove files
+os.chdir(r'G:\Meine Ablage\Doktor\Dissertation\Paper 1\Code\Aktuell')
+
+for file in os.listdir():
+    if file.endswith('.log'):
+        os.remove(file)
 
 class Problem:
     def __init__(self, dfData, DemandDF, eps, Min_WD, Max_WD):
@@ -331,6 +338,7 @@ class Problem:
 
     def solveModelWithCallback(self):
         try:
+            self.model.Params.LogFile = "log1.log"
             self.model._obj = None
             self.model._bd = None
             self.model._data = []
@@ -492,3 +500,22 @@ problem.solveModelWithCallback()
 
 problem.calc_behavior(problem.calc_u_res(), problem.calc_x_res())
 problem.calc_naive(problem.calc_u_res(), problem.calc_x_res())
+
+
+def opimality_plot():
+    pd.set_option('display.max_columns', None)
+    results, timeline = glt.get_dataframe(["./log1.log"], timelines=True)
+
+    # Plot
+    default_run = timeline["nodelog"]
+    print(default_run["Time"])
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=default_run["Time"], y=default_run["Incumbent"], name="Primal Bound"))
+    fig.add_trace(go.Scatter(x=default_run["Time"], y=default_run["BestBd"], name="Dual Bound"))
+    fig.add_trace(go.Scatter(x=default_run["Time"], y=default_run["Gap"], name="Gap"))
+    fig.update_xaxes(title="Runtime")
+    fig.update_yaxes(title="Obj Val")
+    fig.show()
+
+    return fig
