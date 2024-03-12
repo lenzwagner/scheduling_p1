@@ -3,9 +3,8 @@ import gurobipy as gu
 from gurobipy import *
 import seaborn as sns
 import pandas as pd
+from optimality_plot import plot, parse_log
 import matplotlib.pyplot as plt
-import plotly.graph_objects as go
-import gurobi_logtools as glt
 import time
 import os
 import csv
@@ -336,6 +335,15 @@ class Problem:
 
         plt.show()
 
+    def saveRuntime(self):
+        time = self.model.Runtime
+        if time <= 60:
+            self.runtime = math.ceil(time)
+        else:
+            self.runtime = time
+
+        return self.runtime
+
     def solveModelWithCallback(self):
         try:
             self.model.Params.LogFile = "log1.log"
@@ -344,6 +352,7 @@ class Problem:
             self.model._data = []
             self.model._start = time.time()
             self.model.optimize(self.myCallback)
+            self.saveRuntime()
             print("Final MIP gap value: %f" % self.model.MIPGap)
             self.plotSolution(self.objective_values)
             self.model.write("final.lp")
@@ -492,30 +501,17 @@ class Problem:
             print('Error code ' + str(e.errno) + ': ' + str(e))
 
 # Build & Solve MP
-problem = Problem(DataDF, Demand_Dict, 0, Min_WD_i, Max_WD_i)
+problem = Problem(DataDF, Demand_Dict, 0.2, Min_WD_i, Max_WD_i)
 problem.buildLinModel()
 problem.updateModel()
 problem.checkForQuadraticCons()
 problem.solveModelWithCallback()
+model_time = problem.model.Runtime
 
 problem.calc_behavior(problem.calc_u_res(), problem.calc_x_res())
 problem.calc_naive(problem.calc_u_res(), problem.calc_x_res())
 
 
-def opimality_plot():
-    pd.set_option('display.max_columns', None)
-    results, timeline = glt.get_dataframe(["./log1.log"], timelines=True)
-
-    # Plot
-    default_run = timeline["nodelog"]
-    print(default_run["Time"])
-
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=default_run["Time"], y=default_run["Incumbent"], name="Primal Bound"))
-    fig.add_trace(go.Scatter(x=default_run["Time"], y=default_run["BestBd"], name="Dual Bound"))
-    fig.add_trace(go.Scatter(x=default_run["Time"], y=default_run["Gap"], name="Gap"))
-    fig.update_xaxes(title="Runtime")
-    fig.update_yaxes(title="Obj Val")
-    fig.show()
-
-    return fig
+# Optimality Plot
+file_path = "./log1.log"
+plot(parse_log(file_path), problem.runtime)
