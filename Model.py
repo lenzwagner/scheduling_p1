@@ -512,6 +512,6 @@ problem.calc_behavior(problem.calc_u_res(), problem.calc_x_res())
 problem.calc_naive(problem.calc_u_res(), problem.calc_x_res())
 
 
-# Optimality Plot
+# Optimality Plots
 file_path = "./log1.log"
 plot(parse_log(file_path), problem.runtime)
